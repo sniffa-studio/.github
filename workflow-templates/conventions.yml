@@ -1,60 +1,14 @@
 name: conventions
 
 on:
-  workflow_call:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Check title and commits
-        env:
-          TITLE: ${{ github.event.pull_request.title }}
-          BASE: ${{ github.event.pull_request.base.sha }}
-          HEAD: ${{ github.event.pull_request.head.sha }}
-        run: |
-          pattern='^(feat|fix|perf|refactor|docs|style|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
-          bad=0
-          if ! grep -Eq "$pattern" <<< "$TITLE"; then
-            echo "::error::PR title does not follow the convention: $TITLE"
-            bad=1
-          fi
-          while IFS= read -r line; do
-            subject="${line#* }"
-            case "$subject" in Merge\ *) continue ;; esac
-            if ! grep -Eq "$pattern" <<< "$subject"; then
-              echo "::error::Commit does not follow the convention: $line"
-              bad=1
-            fi
-          done < <(git log --format='%h %s' "$BASE..$HEAD")
-          exit $bad
-
-  label:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Label from title
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TITLE: ${{ github.event.pull_request.title }}
-          PR: ${{ github.event.pull_request.number }}
-          REPO: ${{ github.repository }}
-        run: |
-          type=$(grep -oE '^[a-z]+' <<< "$TITLE" || true)
-          case "$type" in
-            feat) label=feature; color=4EC471 ;;
-            fix) label=bug; color=FC301E ;;
-            perf) label=performance; color=F2B33D ;;
-            refactor) label=refactor; color=8B9C92 ;;
-            docs) label=docs; color=5DA9E9 ;;
-            *) label=chore; color=C5CCC8 ;;
-          esac
-          gh label create "$label" --repo "$REPO" --color "$color" --force
-          gh pr edit "$PR" --repo "$REPO" --add-label "$label"
-          if grep -Eq '^[a-z]+(\([a-z0-9-]+\))?!:' <<< "$TITLE"; then
-            gh label create breaking --repo "$REPO" --color B60205 --force
-            gh pr edit "$PR" --repo "$REPO" --add-label breaking
-          fi
+  conventions:
+    uses: sniffa-studio/.github/.github/workflows/conventions.yml@main
