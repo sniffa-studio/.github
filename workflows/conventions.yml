@@ -1,0 +1,14 @@
+name: conventions
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  conventions:
+    uses: sniffa-studio/.github/.github/workflows/conventions.yml@main
