@@ -1,0 +1,6 @@
+{
+  "name": "Sniffa Conventions",
+  "description": "Checks feat: / fix: in PR titles and commits and labels the pull request.",
+  "iconName": "octicon git-commit",
+  "categories": ["Automation"]
+}
