@@ -1,0 +1,23 @@
+name: Feature request
+description: An idea for something new or better.
+labels: ["feature"]
+body:
+  - type: textarea
+    attributes:
+      label: What you would like
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Why
+      description: What it solves or makes better, and for whom.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Other ways
+      description: Anything you already tried or other ways to get there.
+    validations:
+      required: false

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue or exploit
+    url: https://github.com/sniffa-studio/.github/blob/main/SECURITY.md
+    about: Please do not open a public issue. Read how to report it privately.
