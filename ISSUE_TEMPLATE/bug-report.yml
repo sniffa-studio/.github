@@ -1,0 +1,43 @@
+name: Bug report
+description: Something does not work the way it should.
+labels: ["bug"]
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you saw, with error messages or screenshots if there are any.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: What should have happened
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Steps to reproduce
+      description: How we can see it ourselves, step by step.
+      placeholder: |
+        1. Join hideandseek-1
+        2. Start a round with /hsround start
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Where
+      description: Server, page or service, and the version if you know it.
+      placeholder: hideandseek-1, mod 1.0.1
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Logs
+      description: Console output or stack trace, pasted as text.
+      render: shell
+    validations:
+      required: false
