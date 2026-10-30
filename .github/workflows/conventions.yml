@@ -53,8 +53,8 @@ jobs:
             *) label=chore; color=C5CCC8 ;;
           esac
           gh label create "$label" --repo "$REPO" --color "$color" --force
-          gh pr edit "$PR" --repo "$REPO" --add-label "$label"
+          gh api --silent -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=$label"
           if grep -Eq '^[a-z]+(\([a-z0-9-]+\))?!:' <<< "$TITLE"; then
             gh label create breaking --repo "$REPO" --color B60205 --force
-            gh pr edit "$PR" --repo "$REPO" --add-label breaking
+            gh api --silent -X POST "repos/$REPO/issues/$PR/labels" -f "labels[]=breaking"
           fi
