@@ -1,14 +1,13 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits", "schedule:weekends"],
+  "extends": ["config:recommended", ":semanticCommits"],
   "timezone": "Europe/Berlin",
   "packageRules": [
     {
       "matchUpdateTypes": ["patch"],
       "matchCurrentVersion": "!/^0/",
       "groupName": "patch updates",
-      "groupSlug": "patch",
-      "automerge": true
+      "groupSlug": "patch"
     },
     {
       "matchUpdateTypes": ["minor"],
