@@ -96,9 +96,11 @@ jobs:
         if: github.event_name == 'push'
         env:
           CHANNEL: ${{ steps.version.outputs.channel }}
+          BRANCH: ${{ github.ref_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           target="$HOME/sniffa-artifacts/${{ github.event.repository.name }}"
-          [ "$CHANNEL" = main ] || target="$target/$CHANNEL"
+          [ "$BRANCH" = "$DEFAULT_BRANCH" ] || target="$target/$CHANNEL"
           mkdir -p "$target"
           rm -f "$target"/*.jar
           cp "${{ steps.jar.outputs.path }}" "$target"/
