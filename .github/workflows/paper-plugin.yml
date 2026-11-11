@@ -35,6 +35,8 @@ jobs:
       kept: ${{ steps.keep.outputs.kept }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-java@v5
         with:
@@ -50,25 +52,44 @@ jobs:
         env:
           REF_NAME: ${{ github.head_ref || github.ref_name }}
           PR: ${{ github.event.pull_request.number }}
+          SNIFFA_MAVEN_USER: ${{ secrets.SNIFFA_MAVEN_USER }}
+          SNIFFA_MAVEN_PASSWORD: ${{ secrets.SNIFFA_MAVEN_PASSWORD }}
         run: |
-          base=$(grep -E '^version=' gradle.properties 2>/dev/null | cut -d= -f2 | sed 's/-SNAPSHOT$//')
-          base=${base:-0.0.0}
+          if [ -z "$SNIFFA_MAVEN_USER" ]; then unset SNIFFA_MAVEN_USER SNIFFA_MAVEN_PASSWORD; fi
+          chmod +x gradlew
           if [ -n "$PR" ]; then
             channel="pr$PR"
           else
             channel=$(printf '%s' "${REF_NAME##*/}" | tr -c 'A-Za-z0-9' '-' | sed 's/-*$//')
           fi
-          version="$base-$channel.${{ github.run_number }}+${GITHUB_SHA::7}"
-          echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if grep -qs 'studio.sniffa.version' build.gradle.kts settings.gradle.kts; then
+            version=$(./gradlew -q sniffaVersion --build-cache | tail -1)
+            managed=true
+          else
+            base=$(grep -E '^version=' gradle.properties 2>/dev/null | cut -d= -f2 | sed 's/-SNAPSHOT$//')
+            base=${base:-0.0.0}
+            version="$base-$channel.${{ github.run_number }}+${GITHUB_SHA::7}"
+            managed=false
+          fi
+          {
+            echo "channel=$channel"
+            echo "version=$version"
+            echo "managed=$managed"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build
         env:
           SNIFFA_MAVEN_USER: ${{ secrets.SNIFFA_MAVEN_USER }}
           SNIFFA_MAVEN_PASSWORD: ${{ secrets.SNIFFA_MAVEN_PASSWORD }}
+          MANAGED: ${{ steps.version.outputs.managed }}
+          VERSION: ${{ steps.version.outputs.version }}
         run: |
-          chmod +x gradlew
-          ./gradlew build --build-cache "-Pversion=${{ steps.version.outputs.version }}"
+          if [ -z "$SNIFFA_MAVEN_USER" ]; then unset SNIFFA_MAVEN_USER SNIFFA_MAVEN_PASSWORD; fi
+          if [ "$MANAGED" = true ]; then
+            ./gradlew build --build-cache
+          else
+            ./gradlew build --build-cache "-Pversion=$VERSION"
+          fi
 
       - name: Find the jar
         id: jar
