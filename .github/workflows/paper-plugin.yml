@@ -84,7 +84,12 @@ jobs:
 
       - name: Check the jar
         if: inputs.must-contain != ''
-        run: unzip -l "${{ steps.jar.outputs.path }}" "${{ inputs.must-contain }}" > /dev/null
+        env:
+          JAR: ${{ steps.jar.outputs.path }}
+          CLASS: ${{ inputs.must-contain }}
+        run: |
+          jar tf "$JAR" > "$RUNNER_TEMP/entries"
+          grep -qxF "$CLASS" "$RUNNER_TEMP/entries" || { echo "::error::$CLASS is not in $(basename "$JAR")"; exit 1; }
 
       - name: Keep the jar
         id: keep
