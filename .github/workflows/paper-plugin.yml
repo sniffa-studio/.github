@@ -84,7 +84,7 @@ jobs:
 
       - name: Check the jar
         if: inputs.must-contain != ''
-        run: unzip -l "${{ steps.jar.outputs.path }}" | grep -q "${{ inputs.must-contain }}"
+        run: unzip -l "${{ steps.jar.outputs.path }}" "${{ inputs.must-contain }}" > /dev/null
 
       - name: Keep the jar
         id: keep
