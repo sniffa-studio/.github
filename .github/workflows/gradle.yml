@@ -43,6 +43,8 @@ jobs:
           java-version: ${{ inputs.java-version }}
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
 
       - name: Build
         env:
@@ -50,7 +52,7 @@ jobs:
           SNIFFA_MAVEN_PASSWORD: ${{ secrets.SNIFFA_MAVEN_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew ${{ inputs.task }} --no-daemon
+          ./gradlew ${{ inputs.task }} --build-cache
 
       - name: Upload jar
         if: inputs.artifact-path != ''
@@ -76,6 +78,8 @@ jobs:
           java-version: ${{ inputs.java-version }}
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
 
       - name: Publish to maven.sniffa.studio
         env:
@@ -85,4 +89,4 @@ jobs:
           SNIFFA_MAVEN_PASSWORD: ${{ secrets.SNIFFA_MAVEN_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew publish --no-daemon
+          ./gradlew publish --build-cache
