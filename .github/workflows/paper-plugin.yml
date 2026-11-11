@@ -130,5 +130,5 @@ jobs:
               echo "| Jar | \`$(basename "$JAR")\` ($(du -h "$JAR" | cut -f1)) |"
               echo "| sha256 | \`$(sha256sum "$JAR" | cut -c1-16)…\` |"
             fi
-            [ -n "$KEPT" ] && echo "| On the runner | \`$KEPT\` |"
+            if [ -n "$KEPT" ]; then echo "| On the runner | \`$KEPT\` |"; fi
           } >> "$GITHUB_STEP_SUMMARY"
