@@ -1,0 +1,129 @@
+name: paper-plugin
+
+on:
+  workflow_call:
+    inputs:
+      java-version:
+        type: string
+        default: "25"
+      jar:
+        type: string
+        default: "build/libs/*.jar"
+      must-contain:
+        type: string
+        default: ""
+      timeout-minutes:
+        type: number
+        default: 15
+    secrets:
+      SNIFFA_MAVEN_USER:
+        required: false
+      SNIFFA_MAVEN_PASSWORD:
+        required: false
+    outputs:
+      version:
+        value: ${{ jobs.build.outputs.version }}
+      kept:
+        value: ${{ jobs.build.outputs.kept }}
+
+jobs:
+  build:
+    runs-on: [self-hosted, sniffa]
+    timeout-minutes: ${{ inputs.timeout-minutes }}
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      kept: ${{ steps.keep.outputs.kept }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ inputs.java-version }}
+
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
+
+      - name: Version
+        id: version
+        env:
+          REF_NAME: ${{ github.head_ref || github.ref_name }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          base=$(grep -E '^version=' gradle.properties 2>/dev/null | cut -d= -f2 | sed 's/-SNAPSHOT$//')
+          base=${base:-0.0.0}
+          if [ -n "$PR" ]; then
+            channel="pr$PR"
+          else
+            channel=$(printf '%s' "${REF_NAME##*/}" | tr -c 'A-Za-z0-9' '-' | sed 's/-*$//')
+          fi
+          version="$base-$channel.${{ github.run_number }}+${GITHUB_SHA::7}"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build
+        env:
+          SNIFFA_MAVEN_USER: ${{ secrets.SNIFFA_MAVEN_USER }}
+          SNIFFA_MAVEN_PASSWORD: ${{ secrets.SNIFFA_MAVEN_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew build --build-cache "-Pversion=${{ steps.version.outputs.version }}"
+
+      - name: Find the jar
+        id: jar
+        run: |
+          jar=""
+          for candidate in ${{ inputs.jar }}; do
+            case "$candidate" in *-sources.jar|*-javadoc.jar|*-plain.jar|*-dev.jar) continue ;; esac
+            [ -f "$candidate" ] || continue
+            if [ -z "$jar" ] || [ "$(stat -c %s "$candidate")" -gt "$(stat -c %s "$jar")" ]; then jar="$candidate"; fi
+          done
+          [ -n "$jar" ] || { echo "::error::No jar matches ${{ inputs.jar }}"; exit 1; }
+          echo "path=$jar" >> "$GITHUB_OUTPUT"
+
+      - name: Check the jar
+        if: inputs.must-contain != ''
+        run: unzip -l "${{ steps.jar.outputs.path }}" | grep -q "${{ inputs.must-contain }}"
+
+      - name: Keep the jar
+        id: keep
+        if: github.event_name == 'push'
+        env:
+          CHANNEL: ${{ steps.version.outputs.channel }}
+        run: |
+          target="$HOME/sniffa-artifacts/${{ github.event.repository.name }}"
+          [ "$CHANNEL" = main ] || target="$target/$CHANNEL"
+          mkdir -p "$target"
+          rm -f "$target"/*.jar
+          cp "${{ steps.jar.outputs.path }}" "$target"/
+          echo "kept=$target/$(basename "${{ steps.jar.outputs.path }}")" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        if: always() && steps.version.outputs.version != ''
+        env:
+          JAR: ${{ steps.jar.outputs.path }}
+          KEPT: ${{ steps.keep.outputs.kept }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          count() {
+            find . -path '*/build/test-results/*' -name 'TEST-*.xml' -exec grep -ho "$1=\"[0-9]*\"" {} + 2>/dev/null \
+              | tr -dc '0-9\n' | awk '{ s += $1 } END { print s + 0 }'
+          }
+          tests=$(count tests); failed=$(( $(count failures) + $(count errors) )); skipped=$(count skipped)
+          {
+            echo "### ${{ github.event.repository.name }} \`$VERSION\`"
+            echo
+            echo "| | |"
+            echo "|---|---|"
+            echo "| Branch | \`$BRANCH\` |"
+            echo "| Commit | \`${GITHUB_SHA::7}\` |"
+            echo "| Java | ${{ inputs.java-version }} |"
+            echo "| Tests | $((tests - failed - skipped)) passed, $failed failed, $skipped skipped |"
+            if [ -n "$JAR" ] && [ -f "$JAR" ]; then
+              echo "| Jar | \`$(basename "$JAR")\` ($(du -h "$JAR" | cut -f1)) |"
+              echo "| sha256 | \`$(sha256sum "$JAR" | cut -c1-16)…\` |"
+            fi
+            [ -n "$KEPT" ] && echo "| On the runner | \`$KEPT\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
