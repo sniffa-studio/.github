@@ -14,6 +14,11 @@
       "matchCurrentVersion": "!/^0/",
       "groupName": "minor updates",
       "groupSlug": "minor"
+    },
+    {
+      "matchPackageNames": ["/^studio\\.sniffa[.:]/"],
+      "groupName": "sniffa libraries",
+      "groupSlug": "sniffa-libraries"
     }
   ]
 }
