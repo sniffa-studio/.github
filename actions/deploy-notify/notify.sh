@@ -13,7 +13,8 @@ run_url="$repo_url/actions/runs/$GITHUB_RUN_ID"
 if [ "${GITHUB_RUN_ATTEMPT:-1}" != 1 ]; then
   run_url="$run_url/attempts/$GITHUB_RUN_ATTEMPT"
 fi
-sha="$GITHUB_SHA"
+sha="${INPUT_SHA:-$GITHUB_SHA}"
+kind="${INPUT_KIND:-deploy}"
 short="${sha::7}"
 branch="$GITHUB_REF_NAME"
 log="${INPUT_LOG:-${RUNNER_TEMP:-/tmp}/sniffa-deploy.log}"
@@ -53,7 +54,9 @@ duration_text() {
 
 commit_json=$(github "repos/$GITHUB_REPOSITORY/commits/$sha" 2> /dev/null || echo '{}')
 message=$(jq -r '.commit.message // empty' <<< "$commit_json")
-[ -n "$message" ] || message="${HEAD_COMMIT_MESSAGE:-}"
+if [ -z "$message" ] && [ "$sha" = "$GITHUB_SHA" ]; then
+  message="${HEAD_COMMIT_MESSAGE:-}"
+fi
 subject=$(printf '%s\n' "$message" | head -1)
 if [[ "$subject" =~ ^Merge\ pull\ request\ \#([0-9]+) ]]; then
   pr="${BASH_REMATCH[1]}"
@@ -138,7 +141,26 @@ if [ "$status" = failure ] && [ -f "$log" ]; then
   fi
 fi
 
+if [ "$kind" = rollback ]; then
+  case "$outcome" in
+    success) outcome=manual-rollback ;;
+    rolled-back) outcome=rollback-reverted ;;
+    rollback-failed|cancelled) ;;
+    *) outcome=rollback-error ;;
+  esac
+fi
+
 case "$outcome" in
+  manual-rollback)
+    title="↩️ $name $environment zurückgerollt"; verb="zurückgerollt"; color=15844367
+    state="↩️ manuell zurückgerollt" ;;
+  rollback-reverted)
+    title="❌ $name $environment Rollback fehlgeschlagen"; verb="Rollback fehlgeschlagen"; color=15158332
+    state="❌ Ziel nicht gesund, die vorher laufende Version läuft wieder" ;;
+  rollback-error)
+    title="❌ $name $environment Rollback fehlgeschlagen"; verb="Rollback fehlgeschlagen"; color=15158332
+    state="❌ Rollback fehlgeschlagen"
+    [ -f /etc/sniffa/freeze ] && state="❌ Event-Freeze aktiv, nichts geändert" ;;
   success)
     title="🚀 $name $environment deployed"; verb="deployed"; color=3066993; state="✅ erfolgreich" ;;
   rolled-back)

@@ -32,6 +32,14 @@ inputs:
     description: One entry per line, either text or a jar glob; shown as the module list
     required: false
     default: ""
+  kind:
+    description: deploy or rollback. A rollback is reported as such, with the target version.
+    required: false
+    default: deploy
+  sha:
+    description: Commit that was deployed when it differs from github.sha (deploy of a requested commit, rollback target)
+    required: false
+    default: ""
   log:
     description: File with the release output, searched for rollback lines. Defaults to $RUNNER_TEMP/sniffa-deploy.log
     required: false
@@ -61,6 +69,8 @@ runs:
         INPUT_IMAGE: ${{ inputs.image }}
         INPUT_MODULES: ${{ inputs.modules }}
         INPUT_LOG: ${{ inputs.log }}
+        INPUT_KIND: ${{ inputs.kind }}
+        INPUT_SHA: ${{ inputs.sha }}
         GH_TOKEN: ${{ inputs.token }}
         WORKFLOW_NAME: ${{ github.workflow }}
         HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
