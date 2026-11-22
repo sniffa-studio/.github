@@ -114,7 +114,7 @@ jobs:
 
       - name: Keep the jar
         id: keep
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           CHANNEL: ${{ steps.version.outputs.channel }}
           BRANCH: ${{ github.ref_name }}
