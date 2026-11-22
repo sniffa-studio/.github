@@ -1,0 +1,38 @@
+name: Resolve the commit to deploy
+description: Turns an optional sha input into a full commit on the default branch. Empty means the commit of the run.
+
+inputs:
+  sha:
+    description: Commit to deploy, 7 to 40 hex characters. Empty means the commit of the run (github.sha).
+    required: false
+    default: ""
+  branch:
+    description: Branch the commit must be reachable from
+    required: false
+    default: main
+  token:
+    description: Token that can read the repository
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  sha:
+    description: Full commit
+    value: ${{ steps.resolve.outputs.sha }}
+  short:
+    description: First seven characters of the commit
+    value: ${{ steps.resolve.outputs.short }}
+  requested:
+    description: true when a sha was given
+    value: ${{ steps.resolve.outputs.requested }}
+
+runs:
+  using: composite
+  steps:
+    - id: resolve
+      shell: bash
+      env:
+        INPUT_SHA: ${{ inputs.sha }}
+        BRANCH: ${{ inputs.branch }}
+        TOKEN: ${{ inputs.token }}
+      run: bash "$GITHUB_ACTION_PATH/resolve.sh"
