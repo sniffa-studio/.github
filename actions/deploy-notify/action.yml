@@ -1,0 +1,67 @@
+name: Deploy notification
+description: Posts the outcome of a deploy to the Discord channel #deploys. Never fails the job.
+
+inputs:
+  webhook:
+    description: Discord webhook URL (secret DISCORD_DEPLOY_WEBHOOK). Empty means a dry run that only prints the message.
+    required: false
+    default: ""
+  environment:
+    description: prod or staging
+    required: true
+  status:
+    description: Pass job.status
+    required: true
+  name:
+    description: Name shown in the message, defaults to the repository name
+    required: false
+    default: ""
+  version:
+    description: Deployed version. Empty means it is read from the jar input, else r<run>-<sha>.
+    required: false
+    default: ""
+  jar:
+    description: Glob of the jar whose file name carries the studio.sniffa.version
+    required: false
+    default: ""
+  image:
+    description: Image tag that was released, if any
+    required: false
+    default: ""
+  modules:
+    description: One entry per line, either text or a jar glob; shown as the module list
+    required: false
+    default: ""
+  log:
+    description: File with the release output, searched for rollback lines. Defaults to $RUNNER_TEMP/sniffa-deploy.log
+    required: false
+    default: ""
+  token:
+    description: Token to read the commit and the run
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  message-id:
+    description: Id of the Discord message, empty on a dry run or failure
+    value: ${{ steps.notify.outputs.message-id }}
+
+runs:
+  using: composite
+  steps:
+    - id: notify
+      shell: bash
+      env:
+        DEPLOY_WEBHOOK: ${{ inputs.webhook }}
+        INPUT_ENVIRONMENT: ${{ inputs.environment }}
+        INPUT_STATUS: ${{ inputs.status }}
+        INPUT_NAME: ${{ inputs.name }}
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_JAR: ${{ inputs.jar }}
+        INPUT_IMAGE: ${{ inputs.image }}
+        INPUT_MODULES: ${{ inputs.modules }}
+        INPUT_LOG: ${{ inputs.log }}
+        GH_TOKEN: ${{ inputs.token }}
+        WORKFLOW_NAME: ${{ github.workflow }}
+        HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+      run: bash "$GITHUB_ACTION_PATH/notify.sh" || echo "::warning::The deploy notification could not be built"
