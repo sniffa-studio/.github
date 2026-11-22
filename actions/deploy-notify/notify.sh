@@ -124,7 +124,10 @@ else
   done
 fi
 duration="unbekannt"
-[ -n "$secs" ] && duration=$(duration_text "$secs")
+if [ -n "$secs" ]; then
+  duration=$(duration_text "$secs")
+  [ -n "$started" ] || duration="$duration (nur Deploy-Job)"
+fi
 
 outcome="$status"
 if [ "$status" = failure ] && [ -f "$log" ]; then
