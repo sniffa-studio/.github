@@ -5,7 +5,6 @@ MCLI_VERSION=RELEASE.2026-10-26T00-00-00Z
 MCLI_TARBALL=mcli_20261026000000.0.0_linux_amd64.tar.gz
 MCLI_TARBALL_SHA256=e86295bb11ed59369c0560f030d59abd42fb64a376b1d7e9799ec2e8596ebf64
 MCLI_SHA256=8afa1243115737e25746e84a59b37d61a29d5fd6e6b76cc3dbccbff2a20380ba
-LINK_EXPIRY=168h
 
 fail() {
   echo "::error::$1"
@@ -100,16 +99,36 @@ collect() {
   done <<< "$S3_PATH"
 }
 
+presign() {
+  S3_KEY_PATH="/$S3_BUCKET/$1" python3 -I -c '
+import datetime, hashlib, hmac, os, urllib.parse
+endpoint = os.environ["S3_ENDPOINT"].rstrip("/")
+scheme, host = endpoint.split("://", 1) if "://" in endpoint else ("https", endpoint)
+access, secret = os.environ["S3_ACCESS_KEY"], os.environ["S3_SECRET_KEY"]
+now = datetime.datetime.now(datetime.timezone.utc)
+amz_date, day = now.strftime("%Y%m%dT%H%M%SZ"), now.strftime("%Y%m%d")
+scope = f"{day}/us-east-1/s3/aws4_request"
+path = urllib.parse.quote(os.environ["S3_KEY_PATH"], safe="/~")
+query = "&".join(f"{k}={urllib.parse.quote(v, safe=chr(126))}" for k, v in sorted({
+    "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+    "X-Amz-Credential": f"{access}/{scope}",
+    "X-Amz-Date": amz_date,
+    "X-Amz-Expires": "604800",
+    "X-Amz-SignedHeaders": "host",
+}.items()))
+request = f"GET\n{path}\n{query}\nhost:{host}\n\nhost\nUNSIGNED-PAYLOAD"
+to_sign = f"AWS4-HMAC-SHA256\n{amz_date}\n{scope}\n{hashlib.sha256(request.encode()).hexdigest()}"
+key = ("AWS4" + secret).encode()
+for part in (day, "us-east-1", "s3", "aws4_request"):
+    key = hmac.new(key, part.encode(), hashlib.sha256).digest()
+signature = hmac.new(key, to_sign.encode(), hashlib.sha256).hexdigest()
+print(f"{scheme}://{host}{path}?{query}&X-Amz-Signature={signature}")
+'
+}
+
 link_line() {
-  local key="$1" label="$2" size="$3" url="" answer attempt
-  for attempt in 1 2 3 4; do
-    answer=$(mcli share download --json --expire "$LINK_EXPIRY" "ci/$S3_BUCKET/$key" 2>&1) || true
-    url=$(jq -r 'select(.share != null) | .share' <<< "$answer" 2>/dev/null) || true
-    [ -z "$url" ] || break
-    echo "Signing a link for $key failed (attempt $attempt): $(jq -r '.error.cause.message // .error.message // .' <<< "$answer" 2>/dev/null || echo "$answer")"
-    [ "$attempt" -eq 4 ] || sleep $((attempt * 2))
-  done
-  [ -n "$url" ] || fail "could not sign a link for $key"
+  local key="$1" label="$2" size="$3" url
+  url=$(presign "$key") || fail "could not sign a link for $key"
   [ -n "${URL:-}" ] || URL="$url"
   LINES+=("- [$label]($url) ($(human_size "$size"))")
 }
