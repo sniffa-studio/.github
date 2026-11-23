@@ -2,23 +2,42 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended", ":semanticCommits"],
   "timezone": "Europe/Berlin",
+  "automergeType": "pr",
+  "platformAutomerge": false,
+  "automergeSchedule": ["after 2am and before 8am"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch"],
-      "matchCurrentVersion": "!/^0/",
-      "groupName": "patch updates",
-      "groupSlug": "patch"
+      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "groupName": "non-major updates",
+      "groupSlug": "non-major",
+      "automerge": true
     },
     {
       "matchUpdateTypes": ["minor"],
-      "matchCurrentVersion": "!/^0/",
-      "groupName": "minor updates",
-      "groupSlug": "minor"
+      "matchCurrentVersion": "!/^v?0\\./",
+      "groupName": "non-major updates",
+      "groupSlug": "non-major",
+      "automerge": true
+    },
+    {
+      "matchUpdateTypes": ["major"],
+      "automerge": false
     },
     {
       "matchPackageNames": ["/^studio\\.sniffa[.:]/"],
       "groupName": "sniffa libraries",
       "groupSlug": "sniffa-libraries"
+    },
+    {
+      "matchPackageNames": [
+        "com.nexomc:nexo",
+        "net.luckperms:api",
+        "me.clip:placeholderapi",
+        "de.maxhenkel.voicechat:voicechat-api"
+      ],
+      "groupName": "server plugin APIs",
+      "groupSlug": "server-plugin-apis",
+      "automerge": false
     }
   ]
 }
