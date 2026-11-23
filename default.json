@@ -7,7 +7,7 @@
   "automergeSchedule": ["after 2am and before 8am"],
   "packageRules": [
     {
-      "matchUpdateTypes": ["patch", "pin", "digest"],
+      "matchUpdateTypes": ["patch", "pin", "pinDigest", "digest"],
       "groupName": "non-major updates",
       "groupSlug": "non-major",
       "automerge": true
