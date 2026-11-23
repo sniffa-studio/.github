@@ -90,9 +90,15 @@ collect() {
 }
 
 link_line() {
-  local key="$1" label="$2" size="$3" url
-  url=$(mcli share download --json --expire "$LINK_EXPIRY" "ci/$S3_BUCKET/$key" | jq -er '.share') \
-    || fail "could not sign a link for $key"
+  local key="$1" label="$2" size="$3" url="" answer attempt
+  for attempt in 1 2 3; do
+    answer=$(mcli share download --json --expire "$LINK_EXPIRY" "ci/$S3_BUCKET/$key" 2>&1) || true
+    url=$(jq -r 'select(.share != null) | .share' <<< "$answer" 2>/dev/null) || true
+    [ -z "$url" ] || break
+    echo "Signing a link for $key failed (attempt $attempt): $answer"
+    sleep 2
+  done
+  [ -n "$url" ] || fail "could not sign a link for $key"
   [ -n "${URL:-}" ] || URL="$url"
   LINES+=("- [$label]($url) ($(human_size "$size"))")
 }
