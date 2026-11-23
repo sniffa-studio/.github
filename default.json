@@ -30,7 +30,6 @@
     },
     {
       "matchPackageNames": [
-        "com.nexomc:nexo",
         "net.luckperms:api",
         "me.clip:placeholderapi",
         "de.maxhenkel.voicechat:voicechat-api"
@@ -38,6 +37,10 @@
       "groupName": "server plugin APIs",
       "groupSlug": "server-plugin-apis",
       "automerge": false
+    },
+    {
+      "matchPackageNames": ["com.nexomc:nexo"],
+      "enabled": false
     }
   ]
 }
