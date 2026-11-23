@@ -1,0 +1,116 @@
+name: s3-artifact
+
+on:
+  pull_request:
+    paths:
+      - 'actions/s3-artifact/**'
+      - '.github/workflows/s3-artifact.yml'
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: [self-hosted, sniffa]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create test files
+        run: |
+          rm -rf sample
+          mkdir -p sample/dist/bin sample/jars sample/runs
+          echo hidden > sample/dist/.dockerignore
+          printf '#!/bin/sh\necho ok\n' > sample/dist/bin/run
+          chmod +x sample/dist/bin/run
+          echo mod > sample/jars/mod.jar
+          echo plugin > sample/jars/plugin.jar
+          echo '{"n":0}' > sample/runs/0.json
+          echo '{"n":1}' > sample/runs/1.json
+      - uses: ./actions/s3-artifact
+        with:
+          mode: upload
+          name: dist
+          path: sample/dist
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - uses: ./actions/s3-artifact
+        with:
+          mode: upload
+          name: jars
+          path: |
+            sample/jars/mod.jar
+            sample/jars/plugin.jar
+          archive: "false"
+          link: "true"
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - uses: ./actions/s3-artifact
+        with:
+          mode: upload
+          name: runner-0
+          path: sample/runs/0.json
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - uses: ./actions/s3-artifact
+        with:
+          mode: upload
+          name: runner-1
+          path: sample/runs/1.json
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+
+  download:
+    needs: upload
+    runs-on: [self-hosted, sniffa]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - run: rm -rf got
+      - uses: ./actions/s3-artifact
+        with:
+          mode: download
+          name: dist
+          path: got/dist
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - uses: ./actions/s3-artifact
+        with:
+          mode: download
+          name: jars
+          path: got/jars
+          archive: "false"
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - uses: ./actions/s3-artifact
+        with:
+          mode: download
+          name: runner-*
+          path: got/runs
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - id: absent
+        uses: ./actions/s3-artifact
+        with:
+          mode: download
+          name: absent
+          path: got/absent
+          if-no-files-found: ignore
+          endpoint: ${{ vars.CI_S3_ENDPOINT }}
+          access-key: ${{ secrets.CI_S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.CI_S3_SECRET_KEY }}
+      - name: Check the contents
+        env:
+          ABSENT: ${{ steps.absent.outputs.found }}
+        run: |
+          test "$(got/dist/bin/run)" = ok
+          test "$(cat got/dist/.dockerignore)" = hidden
+          test "$(cat got/jars/mod.jar)" = mod
+          test "$(cat got/jars/plugin.jar)" = plugin
+          test "$(cat got/runs/runner-0/sample/runs/0.json)" = '{"n":0}'
+          test "$(cat got/runs/runner-1/sample/runs/1.json)" = '{"n":1}'
+          test "$ABSENT" = false
