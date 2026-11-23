@@ -1,0 +1,81 @@
+name: S3 artifact
+description: Hands build results between jobs and workflows through the bucket sniffa-ci on Silo instead of GitHub artifacts. Objects expire after 7 days.
+
+inputs:
+  mode:
+    description: upload or download
+    required: true
+  name:
+    description: Artifact name. On download a name with * or ? fetches every matching artifact of the run, each into its own folder below path.
+    required: true
+  path:
+    description: Upload, one path or glob per line (a single directory is stored without its own name). Download, the folder to unpack into.
+    required: false
+    default: .
+  archive:
+    description: true packs everything into <name>.tar.zst. false stores the files one by one below <name>/, so people can download a jar directly.
+    required: false
+    default: "true"
+  link:
+    description: Upload only. true writes download links valid for 7 days into the job summary.
+    required: false
+    default: "false"
+  if-no-files-found:
+    description: Upload, what happens when the paths match nothing. Download, when the artifact does not exist. error, warn or ignore.
+    required: false
+    default: error
+  run-id:
+    description: Run whose artifact is meant, defaults to the current run. Download takes several ids (space, comma or newline separated) and uses the first run that has the artifact.
+    required: false
+    default: ${{ github.run_id }}
+  repository:
+    description: Repository name used as the first part of the key, defaults to the current repository
+    required: false
+    default: ""
+  endpoint:
+    description: S3 endpoint, pass vars.CI_S3_ENDPOINT
+    required: true
+  access-key:
+    description: Pass secrets.CI_S3_ACCESS_KEY
+    required: true
+  secret-key:
+    description: Pass secrets.CI_S3_SECRET_KEY
+    required: true
+  bucket:
+    description: Bucket
+    required: false
+    default: sniffa-ci
+
+outputs:
+  key:
+    description: Object key (archive) or key prefix (files) of the artifact
+    value: ${{ steps.run.outputs.key }}
+  found:
+    description: Download only, true when at least one artifact was fetched
+    value: ${{ steps.run.outputs.found }}
+  run-id:
+    description: Download only, the run the artifact came from
+    value: ${{ steps.run.outputs.run-id }}
+  url:
+    description: Upload with link only, download link of the archive or the first file, valid for 7 days
+    value: ${{ steps.run.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      env:
+        S3_MODE: ${{ inputs.mode }}
+        S3_NAME: ${{ inputs.name }}
+        S3_PATH: ${{ inputs.path }}
+        S3_ARCHIVE: ${{ inputs.archive }}
+        S3_LINK: ${{ inputs.link }}
+        S3_IF_NONE: ${{ inputs.if-no-files-found }}
+        S3_RUN_ID: ${{ inputs.run-id }}
+        S3_REPOSITORY: ${{ inputs.repository }}
+        S3_ENDPOINT: ${{ inputs.endpoint }}
+        S3_ACCESS_KEY: ${{ inputs.access-key }}
+        S3_SECRET_KEY: ${{ inputs.secret-key }}
+        S3_BUCKET: ${{ inputs.bucket }}
+      run: bash "$GITHUB_ACTION_PATH/s3-artifact.sh"
