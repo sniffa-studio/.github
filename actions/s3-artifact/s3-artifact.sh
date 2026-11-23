@@ -63,6 +63,17 @@ mcli() {
   "$MCLI" --no-color --disable-pager "$@" < /dev/null
 }
 
+retry() {
+  local attempt
+  for attempt in 1 2 3 4; do
+    if "$@"; then
+      return 0
+    fi
+    [ "$attempt" -eq 4 ] || sleep $((attempt * 2))
+  done
+  return 1
+}
+
 configure() {
   [ -n "$S3_ENDPOINT" ] || fail "endpoint is empty, set the variable CI_S3_ENDPOINT"
   [ -n "$S3_ACCESS_KEY" ] && [ -n "$S3_SECRET_KEY" ] || fail "access-key or secret-key is empty, set the secrets CI_S3_ACCESS_KEY and CI_S3_SECRET_KEY"
@@ -91,12 +102,12 @@ collect() {
 
 link_line() {
   local key="$1" label="$2" size="$3" url="" answer attempt
-  for attempt in 1 2 3; do
+  for attempt in 1 2 3 4; do
     answer=$(mcli share download --json --expire "$LINK_EXPIRY" "ci/$S3_BUCKET/$key" 2>&1) || true
     url=$(jq -r 'select(.share != null) | .share' <<< "$answer" 2>/dev/null) || true
     [ -z "$url" ] || break
-    echo "Signing a link for $key failed (attempt $attempt): $answer"
-    sleep 2
+    echo "Signing a link for $key failed (attempt $attempt): $(jq -r '.error.cause.message // .error.message // .' <<< "$answer" 2>/dev/null || echo "$answer")"
+    [ "$attempt" -eq 4 ] || sleep $((attempt * 2))
   done
   [ -n "$url" ] || fail "could not sign a link for $key"
   [ -n "${URL:-}" ] || URL="$url"
@@ -109,7 +120,8 @@ summary_links() {
   if [ "$S3_ARCHIVE" = true ]; then
     link_line "$key" "$(basename "$key")" "$(stat -c %s "$WORK/$S3_NAME.tar.zst")"
   else
-    listing=$(mcli ls --recursive --json "ci/$S3_BUCKET/$key" | jq -c 'select(.type == "file") | [.key, .size]')
+    listing=$(retry mcli ls --recursive --json "ci/$S3_BUCKET/$key") || fail "could not list $S3_BUCKET/$key"
+    listing=$(jq -c 'select(.type == "file") | [.key, .size]' <<< "$listing")
     while IFS= read -r entry; do
       [ -n "$entry" ] || continue
       link_line "$key$(jq -r '.[0]' <<< "$entry")" "$(jq -r '.[0]' <<< "$entry")" "$(jq -r '.[1]' <<< "$entry")"
@@ -138,7 +150,7 @@ upload() {
     else
       tar -cf - -- "${FILES[@]}" | zstd -q -T0 -3 -o "$archive"
     fi
-    mcli cp "$archive" "ci/$S3_BUCKET/$key" > /dev/null
+    retry mcli cp "$archive" "ci/$S3_BUCKET/$key" > /dev/null || fail "could not upload $S3_BUCKET/$key"
     echo "Uploaded $S3_BUCKET/$key ($(human_size "$(stat -c %s "$archive")"))"
     echo "key=$key" >> "$GITHUB_OUTPUT"
     if [ "$S3_LINK" = true ]; then
@@ -148,13 +160,14 @@ upload() {
     local prefix="$BASE/$S3_NAME/" entry
     mcli rm --recursive --force "ci/$S3_BUCKET/$prefix" > /dev/null 2>&1 || true
     if [ ${#FILES[@]} -eq 1 ] && [ -d "${FILES[0]}" ]; then
-      mcli cp --recursive "${FILES[0]%/}/" "ci/$S3_BUCKET/$prefix" > /dev/null
+      retry mcli cp --recursive "${FILES[0]%/}/" "ci/$S3_BUCKET/$prefix" > /dev/null || fail "could not upload to $S3_BUCKET/$prefix"
     else
       for entry in "${FILES[@]}"; do
         if [ -d "$entry" ]; then
-          mcli cp --recursive "${entry%/}/" "ci/$S3_BUCKET/$prefix$(basename "$entry")/" > /dev/null
+          retry mcli cp --recursive "${entry%/}/" "ci/$S3_BUCKET/$prefix$(basename "$entry")/" > /dev/null \
+            || fail "could not upload $entry"
         else
-          mcli cp "$entry" "ci/$S3_BUCKET/$prefix$(basename "$entry")" > /dev/null
+          retry mcli cp "$entry" "ci/$S3_BUCKET/$prefix$(basename "$entry")" > /dev/null || fail "could not upload $entry"
         fi
       done
     fi
@@ -169,12 +182,16 @@ upload() {
   fi
 }
 
+list_run() {
+  local answer
+  answer=$(retry mcli ls --json "ci/$S3_BUCKET/$BASE/") || answer=""
+  ENTRIES=$(jq -r 'select(.status == "success") | .key' <<< "$answer" 2>/dev/null || true)
+}
+
 exists() {
-  if [ "$S3_ARCHIVE" = true ]; then
-    mcli stat "ci/$S3_BUCKET/$BASE/$1.tar.zst" > /dev/null 2>&1
-  else
-    [ -n "$(mcli ls "ci/$S3_BUCKET/$BASE/$1/" 2>/dev/null)" ]
-  fi
+  local entry="$1.tar.zst"
+  [ "$S3_ARCHIVE" = true ] || entry="$1/"
+  grep -qxF -- "$entry" <<< "$ENTRIES"
 }
 
 fetch() {
@@ -182,21 +199,21 @@ fetch() {
   mkdir -p "$target"
   if [ "$S3_ARCHIVE" = true ]; then
     local key="$BASE/$name.tar.zst" archive="$WORK/$name.tar.zst"
-    mcli cp "ci/$S3_BUCKET/$key" "$archive" > /dev/null
-    zstd -q -dc "$archive" | tar -xf - -C "$target"
+    retry mcli cp "ci/$S3_BUCKET/$key" "$archive" > /dev/null || fail "could not download $S3_BUCKET/$key"
+    zstd -q -dc "$archive" | tar -xf - -C "$target" || fail "could not unpack $S3_BUCKET/$key"
     rm -f "$archive"
     echo "Downloaded $S3_BUCKET/$key into $target"
   else
     local prefix="$BASE/$name/"
-    mcli cp --recursive "ci/$S3_BUCKET/$prefix" "${target%/}/" > /dev/null
+    retry mcli cp --recursive "ci/$S3_BUCKET/$prefix" "${target%/}/" > /dev/null || fail "could not download $S3_BUCKET/$prefix"
     echo "Downloaded $S3_BUCKET/$prefix into $target"
   fi
 }
 
 download_run() {
-  local found=false
+  local found=false entry name
+  list_run
   if [[ "$S3_NAME" == *[*?]* ]]; then
-    local entry name
     while IFS= read -r entry; do
       if [ "$S3_ARCHIVE" = true ]; then
         [[ "$entry" == *.tar.zst ]] || continue
@@ -208,7 +225,7 @@ download_run() {
       [[ "$name" == $S3_NAME ]] || continue
       fetch "$name" "${S3_PATH%/}/$name"
       found=true
-    done < <(mcli ls --json "ci/$S3_BUCKET/$BASE/" 2>/dev/null | jq -r 'select(.status == "success") | .key')
+    done <<< "$ENTRIES"
   elif exists "$S3_NAME"; then
     fetch "$S3_NAME" "$S3_PATH"
     found=true
