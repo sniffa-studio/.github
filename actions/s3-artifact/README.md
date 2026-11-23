@@ -7,7 +7,7 @@ no quota. Objects expire after 7 days (bucket lifecycle rule).
 Keys: `<repo>/<run_id>/<name>.tar.zst`, or `<repo>/<run_id>/<name>/<file>` with `archive: "false"`.
 
 Every repository that uses it needs the secrets `CI_S3_ACCESS_KEY`, `CI_S3_SECRET_KEY` and the variable
-`CI_S3_ENDPOINT`. The key may only read and write `sniffa-ci` (Silo user and policy `sniffa-ci`, keys in
+`CI_S3_ENDPOINT`. The key may only read and write `sniffa-ci` (Silo user `ci-artifacts`, policy `sniffa-ci`, keys in
 `/opt/silo/clients/sniffa-ci/` on sniffa-base). The action downloads a pinned `mcli` (pgsty/mc) and checks its
 checksum; it needs a Linux x64 runner with `zstd` and `jq`.
 
