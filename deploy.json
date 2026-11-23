@@ -1,0 +1,6 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": ["Repositories that deploy to production when main changes: branches and merges only at night"],
+  "schedule": ["after 2am and before 8am"],
+  "automergeSchedule": ["after 2am and before 8am"]
+}
