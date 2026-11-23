@@ -44,14 +44,14 @@ or globs keep their paths relative to the workspace. Hidden files and file modes
 | `archive` | `true` | `false` stores the files one by one, for direct downloads |
 | `link` | `false` | Upload: download links valid for 7 days in the job summary |
 | `if-no-files-found` | `error` | `error`, `warn` or `ignore`; on download it applies to a missing artifact |
-| `run-id` | current run | Another run, for artifacts of other workflows |
+| `run-id` | current run | Another run, for artifacts of other workflows. Download takes several ids and uses the first run that has the artifact |
 | `repository` | current repository | |
 
-Outputs: `key`, `found` (download), `url` (upload with `link`).
+Outputs: `key`, `found` and `run-id` (download), `url` (upload with `link`).
 
 ## From another workflow
 
-Find the run the usual way and pass its id:
+Find the run the usual way and pass its id, or several ids to take the newest run that still has the artifact:
 
 ```bash
 run=$(gh run list -w api-contract.yml -b main -s success -L 1 --json databaseId -q '.[0].databaseId')
