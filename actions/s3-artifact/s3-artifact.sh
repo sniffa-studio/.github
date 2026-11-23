@@ -187,8 +187,7 @@ fetch() {
   fi
 }
 
-download() {
-  [[ "$S3_NAME" =~ ^[A-Za-z0-9._*?-]+$ ]] || fail "name $S3_NAME may only contain letters, digits, dot, dash, underscore, * and ?"
+download_run() {
   local found=false
   if [[ "$S3_NAME" == *[*?]* ]]; then
     local entry name
@@ -208,16 +207,33 @@ download() {
     fetch "$S3_NAME" "$S3_PATH"
     found=true
   fi
-  echo "found=$found" >> "$GITHUB_OUTPUT"
-  if [ "$found" = false ]; then
-    missing "No artifact $S3_NAME in $S3_BUCKET/$BASE/"
-  fi
+  [ "$found" = true ]
 }
 
-[[ "$S3_RUN_ID" =~ ^[0-9]+$ ]] || fail "run-id $S3_RUN_ID is not a run id"
+download() {
+  [[ "$S3_NAME" =~ ^[A-Za-z0-9._*?-]+$ ]] || fail "name $S3_NAME may only contain letters, digits, dot, dash, underscore, * and ?"
+  local id
+  for id in "${RUN_IDS[@]}"; do
+    BASE="$REPO/$id"
+    if download_run; then
+      echo "found=true" >> "$GITHUB_OUTPUT"
+      echo "run-id=$id" >> "$GITHUB_OUTPUT"
+      return
+    fi
+  done
+  echo "found=false" >> "$GITHUB_OUTPUT"
+  missing "No artifact $S3_NAME in $S3_BUCKET/$REPO/ for run ${RUN_IDS[*]}"
+}
+
+read -r -a RUN_IDS <<< "$(tr -s '[:space:],' ' ' <<< "$S3_RUN_ID")"
+[ ${#RUN_IDS[@]} -gt 0 ] || fail "run-id is empty"
+for id in "${RUN_IDS[@]}"; do
+  [[ "$id" =~ ^[0-9]+$ ]] || fail "run-id $id is not a run id"
+done
+[ "$S3_MODE" != upload ] || [ ${#RUN_IDS[@]} -eq 1 ] || fail "upload takes exactly one run-id"
 REPO="${S3_REPOSITORY:-${GITHUB_REPOSITORY#*/}}"
 [[ "$REPO" =~ ^[A-Za-z0-9._-]+$ ]] || fail "repository $REPO is not a repository name"
-BASE="$REPO/$S3_RUN_ID"
+BASE="$REPO/${RUN_IDS[0]}"
 case "$S3_IF_NONE" in error | warn | ignore) ;; *) fail "if-no-files-found must be error, warn or ignore" ;; esac
 case "$S3_ARCHIVE" in true | false) ;; *) fail "archive must be true or false" ;; esac
 

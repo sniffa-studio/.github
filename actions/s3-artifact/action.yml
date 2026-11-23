@@ -25,7 +25,7 @@ inputs:
     required: false
     default: error
   run-id:
-    description: Run whose artifact is meant, defaults to the current run
+    description: Run whose artifact is meant, defaults to the current run. Download takes several ids (space, comma or newline separated) and uses the first run that has the artifact.
     required: false
     default: ${{ github.run_id }}
   repository:
@@ -53,6 +53,9 @@ outputs:
   found:
     description: Download only, true when at least one artifact was fetched
     value: ${{ steps.run.outputs.found }}
+  run-id:
+    description: Download only, the run the artifact came from
+    value: ${{ steps.run.outputs.run-id }}
   url:
     description: Upload with link only, download link of the archive or the first file, valid for 7 days
     value: ${{ steps.run.outputs.url }}
